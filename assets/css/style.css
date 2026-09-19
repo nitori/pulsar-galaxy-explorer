@@ -347,6 +347,13 @@ html, body {
 .class-row:has(input:not(:checked)) .class-dot { opacity: 0.25; }
 .class-row:has(input:not(:checked)) .class-count { opacity: 0.35; }
 
+/* While the Voyager selection is on, every other filter is bypassed — dim them */
+#sidebar.voyager-active .sidebar-section:has(#class-filters),
+#sidebar.voyager-active .sidebar-section:has(.slider) {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
 /* Sliders */
 .slider {
   width: 100%;
