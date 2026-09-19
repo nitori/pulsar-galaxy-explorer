@@ -9,6 +9,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { PPdotDiagram } from './ppdot.js';
 import { TourEngine, TOUR_DEFS } from './tours.js';
+import { SELECTIONS } from './selections.js';
 
 // ── Class definitions ─────────────────────────────────────────────────────────
 const CLASS_DEF = {
@@ -22,25 +23,6 @@ const CLASS_DEF = {
   BINARY_PULSAR: { color: 0x00ffcc, size: 0.20, label: 'Binary Pulsar' },
 };
 const CLASS_ORDER = Object.keys(CLASS_DEF);
-
-// The 14 pulsars on the Pioneer plaque / Voyager Golden Record map (Drake, 1972).
-// Identification per https://www.johnstonsarchive.net/astro/pulsarmap.html
-const VOYAGER_PULSARS = new Set([
-  'J1731-4744', // B1727-47
-  'J1456-6843', // B1451-68
-  'J1243-6423', // B1240-64
-  'J0835-4510', // B0833-45  (Vela)
-  'J0953+0755', // B0950+08
-  'J0826+2637', // B0823+26
-  'J0534+2200', // B0531+21  (Crab)
-  'J0528+2200', // B0525+21
-  'J0332+5434', // B0329+54
-  'J2219+4754', // B2217+47
-  'J2018+2839', // B2016+28
-  'J1935+1616', // B1933+16
-  'J1932+1059', // B1929+10
-  'J1645-0317', // B1642-03
-]);
 
 const CLASS_DESCRIPTIONS = {
   CANONICAL: (s) => `A normal rotation-powered pulsar spinning ${s.p0 ? 'once every ' + s.p0.toFixed(3) + ' seconds' : 'at a typical rate'}. These are the most common neutron stars — collapsed stellar cores left behind after a supernova explosion. They beam radio waves like a cosmic lighthouse.`,
@@ -99,7 +81,7 @@ let filterState = {
   distMax: 100,        // show everything by default (slider display is informational)
   bfieldMin: 1e8,
   bfieldMax: 1e15,
-  voyagerOnly: false, // when true, show only the 14 Pioneer/Voyager map pulsars
+  selections: new Set(), // active SELECTIONS ids; non-empty → show only their union
 };
 
 // FPS tracking
@@ -429,6 +411,11 @@ function setupPostProcessing() {
 // ── Filters ───────────────────────────────────────────────────────────────────
 function applyFilters() {
   let visible = 0;
+  // Active special selections override every other filter: show exactly their union
+  const selected = filterState.selections.size
+    ? new Set(SELECTIONS.filter(s => filterState.selections.has(s.id)).flatMap(s => s.jnames))
+    : null;
+
   CLASS_ORDER.forEach(cls => {
     const mesh = instancedMeshes[cls];
     if (!mesh) return;
@@ -436,9 +423,8 @@ function applyFilters() {
     const clsOn = filterState.classes.has(cls);
 
     arr.forEach((star, i) => {
-      // Voyager selection overrides every other filter: show exactly those 14
-      const show = filterState.voyagerOnly
-        ? VOYAGER_PULSARS.has(star.jname)
+      const show = selected
+        ? selected.has(star.jname)
         : clsOn
         && (star.p0 == null || (star.p0 >= filterState.periodMin && star.p0 <= filterState.periodMax))
         && (star.dist_kpc == null || (star.dist_kpc >= filterState.distMin && star.dist_kpc <= filterState.distMax))
@@ -872,6 +858,7 @@ function setupUI() {
   fetch('/api/stats').then(r => r.json()).then(data => {
     buildClassFilters(data.counts);
   });
+  buildSpecialSelections();
 
   // View tabs
   document.querySelectorAll('.view-tab').forEach(btn => {
@@ -961,13 +948,6 @@ function setupUI() {
 
   // Reset filters
   document.getElementById('reset-filters').addEventListener('click', resetFilters);
-
-  // Voyager / Pioneer map selection
-  document.getElementById('voyager-only').addEventListener('change', e => {
-    filterState.voyagerOnly = e.target.checked;
-    document.getElementById('sidebar').classList.toggle('voyager-active', e.target.checked);
-    applyFilters();
-  });
 
   // Tours
   setupTours();
@@ -1149,6 +1129,34 @@ function buildClassFilters(counts) {
   });
 }
 
+function buildSpecialSelections() {
+  const container = document.getElementById('special-selections');
+  container.innerHTML = '';
+
+  SELECTIONS.forEach(sel => {
+    const colorHex = '#' + sel.color.toString(16).padStart(6, '0');
+    // Only count members actually present in the loaded catalogue
+    const count = sel.jnames.filter(j => starIndexMap.has(j)).length;
+
+    const row = document.createElement('label');
+    row.className = 'class-row';
+    row.title = sel.description;
+    row.innerHTML = `
+      <input type="checkbox" data-sel="${sel.id}">
+      <span class="class-dot" style="background:${colorHex}"></span>
+      <span class="class-label">${sel.label}</span>
+      <span class="class-count">${count}</span>
+    `;
+    row.querySelector('input').addEventListener('change', e => {
+      if (e.target.checked) filterState.selections.add(sel.id);
+      else filterState.selections.delete(sel.id);
+      document.getElementById('sidebar').classList.toggle('selection-active', filterState.selections.size > 0);
+      applyFilters();
+    });
+    container.appendChild(row);
+  });
+}
+
 function setupSliders() {
   const periodMin = document.getElementById('period-min');
   const periodMax = document.getElementById('period-max');
@@ -1235,12 +1243,12 @@ function resetFilters() {
   filterState.distMax = 100;
   filterState.bfieldMin = 1e8;
   filterState.bfieldMax = 1e15;
-  filterState.voyagerOnly = false;
+  filterState.selections.clear();
 
   // Reset UI
   document.querySelectorAll('#class-filters input[type=checkbox]').forEach(cb => { cb.checked = true; });
-  document.getElementById('voyager-only').checked = false;
-  document.getElementById('sidebar').classList.remove('voyager-active');
+  document.querySelectorAll('#special-selections input[type=checkbox]').forEach(cb => { cb.checked = false; });
+  document.getElementById('sidebar').classList.remove('selection-active');
   document.getElementById('period-min').value = -3;
   document.getElementById('period-max').value = 1.5;
   document.getElementById('dist-min').value = 0;
