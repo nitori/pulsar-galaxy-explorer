@@ -286,6 +286,7 @@ function buildGalaxySurround() {
     transparent: true,
     opacity: 0.55,
     sizeAttenuation: true,
+    depthWrite: false,
   });
 
   scene.add(new THREE.Points(geo, mat));
@@ -297,6 +298,7 @@ function buildGalaxySurround() {
     transparent: true,
     opacity: 0.08,
     side: THREE.DoubleSide,
+    depthWrite: false,
   });
   const disc = new THREE.Mesh(discGeo, discMat);
   disc.rotation.x = Math.PI / 2;
@@ -322,6 +324,7 @@ function buildGalaxySurround() {
       color: armColors[ai],
       transparent: true,
       opacity: 0.20,
+      depthWrite: false,
     });
     scene.add(new THREE.Line(armGeo, armMat));
   });
@@ -356,7 +359,7 @@ function addLabel(text, pos, color) {
   ctx.fillText(text, 128, 32);
 
   const tex = new THREE.CanvasTexture(canvas);
-  const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.8 });
+  const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.8, depthWrite: false });
   const sprite = new THREE.Sprite(spriteMat);
   sprite.position.copy(pos);
   sprite.scale.set(6, 1.5, 1);
@@ -365,7 +368,7 @@ function addLabel(text, pos, color) {
 }
 
 function buildCoordinateGrid() {
-  const mat = new THREE.LineBasicMaterial({ color: 0x112233, transparent: true, opacity: 0.3 });
+  const mat = new THREE.LineBasicMaterial({ color: 0x112233, transparent: true, opacity: 0.3, depthWrite: false });
   const R = 50;
   // Longitude lines every 30°
   for (let gl = 0; gl < 360; gl += 30) {
